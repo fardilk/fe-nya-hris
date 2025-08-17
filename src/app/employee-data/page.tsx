@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { getEmployees, getDepartments, getPositions, getClients } from "@/lib/api";
 
 interface Employee {
@@ -9,7 +10,7 @@ interface Employee {
   department_id?: number;
   position_id?: number;
   client_id?: number;
-  [key: string]: any;
+  // Remove index signature to avoid 'any' type
 }
 
 
@@ -24,21 +25,41 @@ export default function EmployeeDataPage() {
   const [clientFilter, setClientFilter] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    Promise.all([
-      getEmployees(),
-      getDepartments(),
-      getPositions(),
-      getClients(),
-    ]).then(([emp, dept, pos, cli]) => {
+    try {
+      const [emp, dept, pos, cli] = await Promise.all([
+        getEmployees(),
+        getDepartments(),
+        getPositions(),
+        getClients(),
+      ]);
       setEmployees(Array.isArray(emp) ? emp : []);
       setDepartments(Array.isArray(dept) ? dept : []);
       setPositions(Array.isArray(pos) ? pos : []);
       setClients(Array.isArray(cli) ? cli : []);
+    } finally {
       setLoading(false);
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Revalidate when window gains focus or tab becomes visible
+  useEffect(() => {
+    const onFocus = () => fetchData();
+    const onVis = () => {
+      if (document.visibilityState === "visible") fetchData();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [fetchData]);
 
   const getName = (id: number | string | undefined, arr: { id?: string; name: string }[]) => {
     if (!id) return "-";
@@ -56,6 +77,11 @@ export default function EmployeeDataPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-10">
+      {/* Navigation */}
+      <nav className="mb-4 flex items-center gap-3">
+        <Link href="/" className="text-blue-600 hover:underline font-semibold">Home</Link>
+        <button onClick={fetchData} className="text-sm px-3 py-1 rounded border hover:bg-gray-50">Refresh</button>
+      </nav>
       <h1 className="text-2xl font-bold mb-4">Data Karyawan</h1>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-4">
         <div className="flex flex-col">

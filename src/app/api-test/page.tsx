@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { getEmployees, postEmployee, getDepartments, getPositions, getClients, postLLM } from "@/lib/api";
+import Link from "next/link";
+import { getEmployees, postEmployee, getDepartments, getPositions, getClients, postLLM, getAvailability, getClientVisitReport } from "@/lib/api";
 import { Employee, Department, Position, Client } from "@/lib/types";
 
 export default function ApiTestPage() {
@@ -14,6 +15,31 @@ export default function ApiTestPage() {
   const [postEmployeeResult, setPostEmployeeResult] = useState<unknown>(null);
   const [successMessage, setSuccessMessage] = useState<string>("");
 
+  // New: availability filters and results
+  const [availabilityFilters, setAvailabilityFilters] = useState<{ department_id: string | ""; position_id: string | "" }>({ department_id: "", position_id: "" });
+  const [availability, setAvailability] = useState<Employee[]>([]);
+  const [clientVisitReport, setClientVisitReport] = useState<unknown>(null);
+
+  // New: date filters for availability
+  const [availabilityDates, setAvailabilityDates] = useState<{ start_date: string; end_date: string }>(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const ymd = `${y}-${m}-${d}`;
+    return { start_date: ymd, end_date: ymd };
+  });
+
+  // New: client and date filters for client-visits report
+  const [reportFilters, setReportFilters] = useState<{ client_id: string | ""; start_date: string; end_date: string }>(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    const ymd = `${y}-${m}-${d}`;
+    return { client_id: "", start_date: ymd, end_date: ymd };
+  });
+
   // Fetch departments and positions on mount
   React.useEffect(() => {
     getDepartments().then(setDepartments);
@@ -23,6 +49,10 @@ export default function ApiTestPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-10 space-y-6">
+      {/* Navigation */}
+      <nav>
+        <Link href="/" className="text-blue-600 hover:underline font-semibold">Home</Link>
+      </nav>
       <h1 className="text-2xl font-bold mb-4">API Test Page</h1>
       <div className="space-x-2 mb-4">
         <form
@@ -147,6 +177,128 @@ export default function ApiTestPage() {
           Test LLM
         </button>
       </div>
+
+      {/* New: Availability tester */}
+      <div className="space-y-2 surface-card p-4">
+        <div className="font-semibold">Availability (required dates; optional filters)</div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <input
+            type="date"
+            className="border px-2 py-1 rounded"
+            value={availabilityDates.start_date}
+            onChange={(e) => setAvailabilityDates((s) => ({ ...s, start_date: e.target.value }))}
+          />
+          <span className="text-sm text-gray-500">s/d</span>
+          <input
+            type="date"
+            className="border px-2 py-1 rounded"
+            value={availabilityDates.end_date}
+            onChange={(e) => setAvailabilityDates((s) => ({ ...s, end_date: e.target.value }))}
+          />
+          <select
+            className="border px-2 py-1 rounded"
+            value={availabilityFilters.department_id}
+            onChange={(e) => setAvailabilityFilters((s) => ({ ...s, department_id: e.target.value }))}
+          >
+            <option value="">All Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          <select
+            className="border px-2 py-1 rounded"
+            value={availabilityFilters.position_id}
+            onChange={(e) => setAvailabilityFilters((s) => ({ ...s, position_id: e.target.value }))}
+          >
+            <option value="">All Positions</option>
+            {positions.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <button
+            className="px-3 py-1 bg-sky-600 text-white rounded"
+            onClick={async () => {
+              setLoading("availability");
+              try {
+                const results = await getAvailability({
+                  start_date: availabilityDates.start_date,
+                  end_date: availabilityDates.end_date,
+                  department_id: availabilityFilters.department_id,
+                  position_id: availabilityFilters.position_id,
+                });
+                // Ensure the returned value is an array of Employee before setting state
+                if (Array.isArray(results)) {
+                  setAvailability(results as Employee[]);
+                } else {
+                  // Fallback to empty array if unexpected shape
+                  setAvailability([]);
+                }
+              } finally {
+                setLoading("");
+              }
+            }}
+            disabled={loading === "availability"}
+          >
+            Get Availability
+          </button>
+        </div>
+        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(availability, null, 2)}</pre>
+      </div>
+
+      {/* New: Client Visit Report */}
+      <div className="space-y-2 surface-card p-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="font-semibold">Client Visit Report</div>
+          <select
+            className="border px-2 py-1 rounded"
+            value={reportFilters.client_id}
+            onChange={(e) => setReportFilters((s) => ({ ...s, client_id: e.target.value }))}
+          >
+            <option value="">Pilih Client</option>
+            {clients.map((c) => (
+              <option key={c.id} value={String(c.id)}>{c.name}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            className="border px-2 py-1 rounded"
+            value={reportFilters.start_date}
+            onChange={(e) => setReportFilters((s) => ({ ...s, start_date: e.target.value }))}
+          />
+          <span className="text-sm text-gray-500">s/d</span>
+          <input
+            type="date"
+            className="border px-2 py-1 rounded"
+            value={reportFilters.end_date}
+            onChange={(e) => setReportFilters((s) => ({ ...s, end_date: e.target.value }))}
+          />
+          <button
+            className="px-3 py-1 bg-amber-600 text-white rounded"
+            onClick={async () => {
+              setLoading("report");
+              try {
+                if (!reportFilters.client_id) {
+                  setClientVisitReport({ error: "client_id is required" });
+                } else {
+                  const r = await getClientVisitReport({
+                    client_id: reportFilters.client_id,
+                    start_date: reportFilters.start_date,
+                    end_date: reportFilters.end_date,
+                  });
+                  setClientVisitReport(r);
+                }
+              } finally {
+                setLoading("");
+              }
+            }}
+            disabled={loading === "report"}
+          >
+            Fetch Report
+          </button>
+        </div>
+        <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(clientVisitReport as object, null, 2)}</pre>
+      </div>
+
       <div>
         <h2 className="font-semibold">Employees</h2>
         <pre className="bg-gray-100 p-2 rounded text-xs overflow-x-auto">{JSON.stringify(employees, null, 2)}</pre>
